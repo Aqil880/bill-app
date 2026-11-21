@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+
+{% block title %}Quotations & Estimates - BillingPro{% endblock %}
+{% block page_title %}Quotations & Estimates{% endblock %}
+
+{% block content %}
+<!-- Top Metrics Row -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center">
+            <div class="stat-icon me-3" style="background: rgba(99, 102, 241, 0.12); color: #4f46e5;">
+                <i class="bi bi-file-earmark-diff fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Total Quotes</span>
+                <h3 class="mb-0 fw-bold text-dark">{{ count_total }}</h3>
+                <small class="text-muted">Total value: ₹{{ "%.2f"|format(total_value) }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center">
+            <div class="stat-icon me-3" style="background: rgba(14, 165, 233, 0.12); color: #0284c7;">
+                <i class="bi bi-send fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Active / Sent</span>
+                <h3 class="mb-0 fw-bold text-dark">{{ count_sent + count_draft }}</h3>
+                <small class="text-muted">{{ count_sent }} sent, {{ count_draft }} drafts</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center">
+            <div class="stat-icon me-3" style="background: rgba(16, 185, 129, 0.12); color: #059669;">
+                <i class="bi bi-check2-circle fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Accepted</span>
+                <h3 class="mb-0 fw-bold text-success">{{ count_accepted }}</h3>
+                <small class="text-muted">Ready for billing</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center">
+            <div class="stat-icon me-3" style="background: rgba(139, 92, 246, 0.12); color: #7c3aed;">
+                <i class="bi bi-receipt-cutoff fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Converted</span>
+                <h3 class="mb-0 fw-bold text-dark">{{ count_converted }}</h3>
+                <small class="text-muted">Invoices generated</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter & Search Bar -->
+<div class="row g-3 mb-4">
+    <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <form method="GET" action="{{ url_for('quotations.list_quotations') }}" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1" style="max-width: 860px;">
+            <div class="input-group shadow-xs" style="max-width: 280px;">
+                <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" name="search" class="form-control border-start-0 ps-0" placeholder="Quotation # or customer..." value="{{ search }}">
+            </div>
+            <div class="d-flex align-items-center gap-1 shadow-xs bg-white p-1 rounded-2 border">
+                <input type="date" name="start_date" class="form-control form-control-sm border-0" value="{{ start_date }}" title="Start Date">
+                <span class="text-muted small px-1">to</span>
+                <input type="date" name="end_date" class="form-control form-control-sm border-0" value="{{ end_date }}" title="End Date">
+            </div>
+            <select name="status" class="form-select form-select-sm shadow-xs" style="max-width: 150px;" onchange="this.form.submit()">
+                <option value="">All Statuses</option>
+                <option value="Draft" {% if status == 'Draft' %}selected{% endif %}>Draft</option>
+                <option value="Sent" {% if status == 'Sent' %}selected{% endif %}>Sent</option>
+                <option value="Accepted" {% if status == 'Accepted' %}selected{% endif %}>Accepted</option>
+                <option value="Converted" {% if status == 'Converted' %}selected{% endif %}>Converted</option>
+                <option value="Declined" {% if status == 'Declined' %}selected{% endif %}>Declined</option>
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-secondary shadow-xs">Filter</button>
+            {% if search or start_date or end_date or status %}
+                <a href="{{ url_for('quotations.list_quotations') }}" class="btn btn-link text-muted p-1" title="Clear Filters"><i class="bi bi-x-circle fs-5"></i></a>
+            {% endif %}
+        </form>
+
+        <a href="{{ url_for('quotations.create_quotation') }}" class="btn btn-primary shadow d-flex align-items-center">
+            <i class="bi bi-plus-lg me-1"></i> New Quotation
+        </a>
+    </div>
+</div>
+
+<!-- Quotations Table Card -->
+<div class="card border-0 shadow-sm overflow-hidden">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-dark">
+            <i class="bi bi-file-earmark-diff me-2 text-primary"></i>All Quotations & Estimates ({{ quotations|length }})
+        </h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Quote #</th>
+                    <th>Date</th>
+                    <th>Valid Until</th>
+                    <th>Customer</th>
+                    <th>Estimated Amount</th>
+                    <th>Status</th>
+                    <th>Converted Bill</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if quotations %}
+                    {% for q in quotations %}
+                    <tr class="{% if q.status == 'Converted' %}table-light opacity-85{% endif %}">
+                        <td>
+                            <a href="{{ url_for('quotations.view_quotation', quotation_id=q.id) }}" class="fw-bold text-primary text-decoration-none">
+                                {{ q.quotation_number }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="small text-muted">{{ q.quotation_date }}</span>
+                        </td>
+                        <td>
+                            <span class="small text-muted">{{ q.valid_until or '—' }}</span>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ q.customer_name }}</div>
+                            <span class="small text-muted"><i class="bi bi-telephone me-1"></i>{{ q.customer_phone }}</span>
+                        </td>
+                        <td>
+                            <span class="fw-bold text-dark">₹{{ "%.2f"|format(q.grand_total) }}</span>
+                        </td>
+                        <td>
+                            {% if q.status == 'Converted' %}
+                                <span class="badge badge-soft-primary"><i class="bi bi-check-all me-1"></i>Converted</span>
+                            {% elif q.status == 'Accepted' %}
+                                <span class="badge badge-soft-success"><i class="bi bi-check-circle me-1"></i>Accepted</span>
+                            {% elif q.status == 'Sent' %}
+                                <span class="badge bg-light text-primary border"><i class="bi bi-send me-1"></i>Sent</span>
+                            {% elif q.status == 'Declined' %}
+                                <span class="badge badge-soft-danger"><i class="bi bi-x-circle me-1"></i>Declined</span>
+                            {% else %}
+                                <span class="badge bg-light text-secondary border">Draft</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if q.converted_invoice_number %}
+                                <a href="{{ url_for('invoices.view_invoice', invoice_id=q.converted_invoice_id) }}" class="fw-bold text-decoration-none text-dark">
+                                    <span class="badge bg-light border text-dark">
+                                        <i class="bi bi-receipt me-1 text-primary"></i>{{ q.converted_invoice_number }}
+                                    </span>
+                                </a>
+                            {% else %}
+                                <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('quotations.view_quotation', quotation_id=q.id) }}" class="btn btn-outline-primary" title="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if q.status != 'Converted' %}
+                                    <a href="{{ url_for('quotations.edit_quotation', quotation_id=q.id) }}" class="btn btn-outline-secondary" title="Edit Quotation">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                {% endif %}
+                                <a href="{{ url_for('quotations.print_pdf', quotation_id=q.id) }}" target="_blank" class="btn btn-outline-dark" title="Print PDF">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                                <a href="{{ url_for('quotations.download_pdf', quotation_id=q.id) }}" class="btn btn-outline-success" title="Download PDF">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                {% if q.status != 'Converted' %}
+                                    <button type="button" class="btn btn-outline-danger" title="Delete"
+                                            data-bs-toggle="modal" data-bs-target="#confirmDeleteModal"
+                                            data-action="{{ url_for('quotations.delete_quotation', quotation_id=q.id) }}"
+                                            data-title="Delete Quotation"
+                                            data-message="Are you sure you want to delete Quotation #{{ q.quotation_number }}? This action cannot be undone.">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-file-earmark-diff display-6 d-block mb-3 text-secondary"></i>
+                            <p class="mb-1">No quotations found matching your criteria.</p>
+                            <a href="{{ url_for('quotations.create_quotation') }}" class="btn btn-sm btn-primary mt-2">
+                                <i class="bi bi-plus-lg me-1"></i> Create First Quotation
+                            </a>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

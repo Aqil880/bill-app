@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Stock Movements Ledger - BillingPro{% endblock %}
+{% block page_title %}Stock Movement Ledger{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="fw-bold mb-1">Inventory Audit & Movement Log</h5>
+            <p class="text-muted small mb-0">Complete historical tracking of all sales deductions, stock additions, returns, and adjustments.</p>
+        </div>
+        <a href="{{ url_for('inventory.list_inventory') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to Inventory
+        </a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Movement ID</th>
+                    <th>Date & Time</th>
+                    <th>Product</th>
+                    <th>Change Type</th>
+                    <th>Quantity Change</th>
+                    <th>Balance After</th>
+                    <th>Reference / Invoice</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if movements %}
+                    {% for m in movements %}
+                    <tr>
+                        <td><span class="text-muted small">#{{ m.id }}</span></td>
+                        <td><span class="small">{{ m.created_at }}</span></td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ m.product_name }}</div>
+                            <span class="badge bg-light text-muted border">{{ m.prod_code }}</span>
+                        </td>
+                        <td>
+                            {% if m.change_type == 'SALE' %}
+                                <span class="badge bg-primary">SALE</span>
+                            {% elif m.change_type == 'PURCHASE' %}
+                                <span class="badge bg-success">PURCHASE</span>
+                            {% elif m.change_type == 'CANCELLATION' %}
+                                <span class="badge bg-warning text-dark">CANCELLATION</span>
+                            {% elif m.change_type == 'RETURN' %}
+                                <span class="badge bg-info text-dark">RETURN</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ m.change_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if m.quantity > 0 %}
+                                <span class="fw-bold text-success">+{{ m.quantity }}</span>
+                            {% else %}
+                                <span class="fw-bold text-danger">{{ m.quantity }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="fw-bold text-dark">{{ m.balance_after }} units</span>
+                        </td>
+                        <td>
+                            <code>{{ m.reference_id or '—' }}</code>
+                        </td>
+                        <td>
+                            <span class="small text-muted">{{ m.notes or '—' }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-clock-history display-6 d-block mb-3 text-secondary"></i>
+                            <p class="mb-0">No stock movements recorded yet.</p>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

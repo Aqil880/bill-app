@@ -1,0 +1,462 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if quotation %}Edit Quotation #{{ quotation.quotation_number }}{% else %}New Quotation / Estimate{% endif %}{% endblock %}
+{% block page_title %}{% if quotation %}Edit Quotation #{{ quotation.quotation_number }}{% else %}Create New Quotation{% endif %}{% endblock %}
+
+{% block content %}
+<form id="quotationForm" action="{% if quotation %}{{ url_for('quotations.edit_quotation', quotation_id=quotation.id) }}{% else %}{{ url_for('quotations.save_quotation') }}{% endif %}" method="POST">
+    <div class="row g-4">
+        <!-- Left Column: Customer & Line Items -->
+        <div class="col-12 col-xl-8">
+            <!-- 1. Customer Selection Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-dark">
+                        <i class="bi bi-person-circle me-2 text-primary"></i>Customer Information
+                    </h6>
+                    <a href="{{ url_for('customers.list_customers') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-plus-lg me-1"></i> New Customer
+                    </a>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Select Customer <span class="text-danger">*</span></label>
+                            <select name="customer_id" id="customerSelect" class="form-select" required>
+                                <option value="">-- Choose Existing Customer --</option>
+                                {% for c in customers %}
+                                    <option value="{{ c.id }}"
+                                            {% if quotation and quotation.customer_id == c.id %}selected{% endif %}
+                                            data-phone="{{ c.phone }}"
+                                            data-email="{{ c.email or '' }}"
+                                            data-address="{{ c.address or '' }}"
+                                            data-gstin="{{ c.gstin or '' }}">
+                                        {{ c.name }} ({{ c.phone }}) [{{ c.customer_id }}]
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Quotation Date <span class="text-danger">*</span></label>
+                            <input type="date" name="quotation_date" class="form-control" value="{{ today_date }}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Valid Until</label>
+                            <input type="date" name="valid_until" class="form-control" value="{{ valid_until }}">
+                        </div>
+                    </div>
+
+                    <!-- Customer Profile Peek -->
+                    <div id="customerPeek" class="mt-3 p-3 bg-light rounded-3 d-none">
+                        <div class="row g-2 small">
+                            <div class="col-sm-6"><strong>Phone:</strong> <span id="peekPhone">—</span></div>
+                            <div class="col-sm-6"><strong>Email:</strong> <span id="peekEmail">—</span></div>
+                            <div class="col-sm-6"><strong>GSTIN:</strong> <span id="peekGstin" class="badge badge-soft-primary">—</span></div>
+                            <div class="col-sm-6"><strong>Address:</strong> <span id="peekAddress">—</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Products / Line Items Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold text-dark">
+                        <i class="bi bi-box-seam me-2 text-primary"></i>Quotation Line Items
+                    </h6>
+                    <button type="button" class="btn btn-sm btn-primary" id="addItemBtn">
+                        <i class="bi bi-plus-lg me-1"></i> Add Product Item
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="itemsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 220px;">Product</th>
+                                    <th style="width: 110px;">Stock</th>
+                                    <th style="width: 110px;">Quantity</th>
+                                    <th style="width: 130px;">Unit Price (₹)</th>
+                                    <th style="width: 110px;">GST %</th>
+                                    <th style="width: 130px;" class="text-end">Amount (₹)</th>
+                                    <th style="width: 50px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemsTableBody">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="emptyItemsNotice" class="text-center py-4 text-muted">
+                        <i class="bi bi-file-earmark-diff display-6 text-secondary d-block mb-2"></i>
+                        <span>No items added yet. Click "Add Product Item" above to add products.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Notes & Remarks Card -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-3">
+                    <label class="form-label fw-semibold">Quotation Notes / Terms</label>
+                    <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Valid for 30 days. Delivery within 7 business days from order confirmation.">{% if quotation %}{{ quotation.notes or '' }}{% endif %}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Calculations & Submit -->
+        <div class="col-12 col-xl-4">
+            <div class="card border-0 shadow-sm sticky-top" style="top: 90px;">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0 fw-bold text-dark">
+                        <i class="bi bi-calculator me-2 text-primary"></i>Quotation Summary
+                    </h6>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Tax Type Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted text-uppercase">Tax Configuration</label>
+                        <select name="tax_type" id="taxTypeSelect" class="form-select form-select-sm">
+                            <option value="intra_state" {% if quotation and quotation.tax_type == 'intra_state' %}selected{% endif %}>Intra-State (CGST + SGST)</option>
+                            <option value="inter_state" {% if quotation and quotation.tax_type == 'inter_state' %}selected{% endif %}>Inter-State (IGST)</option>
+                            <option value="exempt" {% if quotation and quotation.tax_type == 'exempt' %}selected{% endif %}>GST Exempt (0% Tax)</option>
+                        </select>
+                    </div>
+
+                    <!-- Discount Section -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted text-uppercase">Discount (Optional)</label>
+                        <div class="input-group input-group-sm">
+                            <select name="discount_type" id="discountTypeSelect" class="form-select" style="max-width: 100px;">
+                                <option value="fixed" {% if quotation and quotation.discount_type == 'fixed' %}selected{% endif %}>Fixed (₹)</option>
+                                <option value="percentage" {% if quotation and quotation.discount_type == 'percentage' %}selected{% endif %}>Rate (%)</option>
+                            </select>
+                            <input type="number" step="0.01" min="0" name="discount_value" id="discountValueInput"
+                                   class="form-control" value="{% if quotation %}{{ quotation.discount_value }}{% else %}0{% endif %}">
+                        </div>
+                    </div>
+
+                    <hr class="my-3 opacity-10">
+
+                    <!-- Breakdown Rows -->
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Subtotal:</span>
+                        <span class="fw-bold" id="displaySubtotal">₹0.00</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-2 text-danger" id="discountRow" style="display: none;">
+                        <span>Discount:</span>
+                        <span class="fw-bold" id="displayDiscount">- ₹0.00</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Taxable Value:</span>
+                        <span class="fw-semibold text-dark" id="displayTaxable">₹0.00</span>
+                    </div>
+
+                    <!-- Tax Splits -->
+                    <div id="intraStateTaxRows">
+                        <div class="d-flex justify-content-between mb-1 small text-muted">
+                            <span>CGST:</span>
+                            <span id="displayCgst">₹0.00</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 small text-muted">
+                            <span>SGST:</span>
+                            <span id="displaySgst">₹0.00</span>
+                        </div>
+                    </div>
+
+                    <div id="interStateTaxRow" style="display: none;">
+                        <div class="d-flex justify-content-between mb-2 small text-muted">
+                            <span>IGST:</span>
+                            <span id="displayIgst">₹0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Grand Total Banner -->
+                    <div class="p-3 rounded-3 mb-4 mt-3" style="background-color: #f8fafc; border: 1px solid var(--card-border);">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="small fw-semibold text-muted text-uppercase">Estimated Total</span>
+                            <h3 class="mb-0 fw-bold" id="displayGrandTotal" style="color: var(--text-main);">₹0.00</h3>
+                        </div>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary py-2 fw-bold shadow-sm" id="submitBtn">
+                            <i class="bi bi-save me-1"></i> {% if quotation %}Update Quotation{% else %}Save Quotation{% endif %}
+                        </button>
+                        <a href="{{ url_for('quotations.list_quotations') }}" class="btn btn-light py-2">
+                            Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden input to serialize items array -->
+    <input type="hidden" name="items_json" id="itemsJsonInput" value="">
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Available products database for client-side quick select
+const availableProducts = [
+    {% for p in products %}
+    {
+        id: {{ p.id }},
+        name: {{ p.name|tojson }},
+        sku: {{ (p.sku or '')|tojson }},
+        price: {{ p.selling_price }},
+        gst: {{ p.gst_rate }},
+        stock: {{ p.stock_quantity }}
+    },
+    {% endfor %}
+];
+
+let lineItems = [];
+
+// If editing existing quotation, prefill items
+{% if quotation and quotation['items'] %}
+lineItems = [
+    {% for item in quotation['items'] %}
+    {
+        product_id: {{ item.product_id or 'null' }},
+        product_name: {{ item.product_name|tojson }},
+        sku: {{ (item.sku or '')|tojson }},
+        quantity: {{ item.quantity }},
+        unit_price: {{ item.unit_price }},
+        gst_rate: {{ item.gst_rate }},
+        stock: 999
+    },
+    {% endfor %}
+];
+{% endif %}
+
+function renderTable() {
+    const tbody = document.getElementById('itemsTableBody');
+    const notice = document.getElementById('emptyItemsNotice');
+    tbody.innerHTML = '';
+
+    if (lineItems.length === 0) {
+        notice.classList.remove('d-none');
+    } else {
+        notice.classList.add('d-none');
+        lineItems.forEach((item, index) => {
+            const lineAmt = (item.quantity * item.unit_price).toFixed(2);
+            let productOptions = '<option value="">-- Choose Catalog Item --</option>';
+            availableProducts.forEach(prod => {
+                const isSelected = prod.id === item.product_id ? 'selected' : '';
+                productOptions += `<option value="${prod.id}" ${isSelected}>${prod.name} (${prod.stock} in stock)</option>`;
+            });
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <select class="form-select form-select-sm product-select mb-1" onchange="onProductSelect(${index}, this.value)">
+                        ${productOptions}
+                    </select>
+                    <input type="text" class="form-control form-control-sm" value="${item.product_name}"
+                           placeholder="Item name / Custom product" oninput="onCustomNameInput(${index}, this.value)">
+                </td>
+                <td>
+                    <span class="badge ${item.stock <= 5 ? 'badge-soft-danger' : 'bg-light text-dark border'}">${item.stock}</span>
+                </td>
+                <td>
+                    <input type="number" min="1" class="form-control form-control-sm" value="${item.quantity}"
+                           onchange="onQuantityChange(${index}, this.value)" oninput="onQuantityChange(${index}, this.value)">
+                </td>
+                <td>
+                    <input type="number" step="0.01" min="0" class="form-control form-control-sm" value="${item.unit_price}"
+                           onchange="onPriceChange(${index}, this.value)" oninput="onPriceChange(${index}, this.value)">
+                </td>
+                <td>
+                    <select class="form-select form-select-sm" onchange="onGstChange(${index}, this.value)">
+                        <option value="0" ${item.gst_rate == 0 ? 'selected' : ''}>0%</option>
+                        <option value="5" ${item.gst_rate == 5 ? 'selected' : ''}>5%</option>
+                        <option value="12" ${item.gst_rate == 12 ? 'selected' : ''}>12%</option>
+                        <option value="18" ${item.gst_rate == 18 ? 'selected' : ''}>18%</option>
+                        <option value="28" ${item.gst_rate == 28 ? 'selected' : ''}>28%</option>
+                    </select>
+                </td>
+                <td class="text-end fw-bold text-dark">
+                    ₹${lineAmt}
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger p-1" onclick="removeItem(${index})" title="Remove item">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    calculateTotals();
+}
+
+function addItem() {
+    lineItems.push({
+        product_id: null,
+        product_name: '',
+        sku: '',
+        quantity: 1,
+        unit_price: 0.0,
+        gst_rate: 18.0,
+        stock: 0
+    });
+    renderTable();
+}
+
+function removeItem(index) {
+    lineItems.splice(index, 1);
+    renderTable();
+}
+
+function onProductSelect(index, prodId) {
+    if (!prodId) {
+        lineItems[index].product_id = null;
+        renderTable();
+        return;
+    }
+    const prod = availableProducts.find(p => p.id == prodId);
+    if (prod) {
+        lineItems[index].product_id = prod.id;
+        lineItems[index].product_name = prod.name;
+        lineItems[index].sku = prod.sku;
+        lineItems[index].unit_price = prod.price;
+        lineItems[index].gst_rate = prod.gst;
+        lineItems[index].stock = prod.stock;
+    }
+    renderTable();
+}
+
+function onCustomNameInput(index, val) {
+    lineItems[index].product_name = val;
+    document.getElementById('itemsJsonInput').value = JSON.stringify(lineItems);
+}
+
+function onQuantityChange(index, val) {
+    const qty = parseInt(val) || 1;
+    lineItems[index].quantity = qty > 0 ? qty : 1;
+    calculateTotals();
+}
+
+function onPriceChange(index, val) {
+    const price = parseFloat(val) || 0.0;
+    lineItems[index].unit_price = price >= 0 ? price : 0.0;
+    calculateTotals();
+}
+
+function onGstChange(index, val) {
+    lineItems[index].gst_rate = parseFloat(val) || 0.0;
+    calculateTotals();
+}
+
+function calculateTotals() {
+    const discountType = document.getElementById('discountTypeSelect').value;
+    const discountValue = parseFloat(document.getElementById('discountValueInput').value) || 0.0;
+    const taxType = document.getElementById('taxTypeSelect').value;
+
+    document.getElementById('itemsJsonInput').value = JSON.stringify(lineItems);
+
+    fetch('/billing/api/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            items: lineItems,
+            discount_type: discountType,
+            discount_value: discountValue,
+            tax_type: taxType
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('displaySubtotal').textContent = `₹${data.subtotal.toFixed(2)}`;
+        document.getElementById('displayTaxable').textContent = `₹${data.taxable_amount.toFixed(2)}`;
+        document.getElementById('displayGrandTotal').textContent = `₹${data.grand_total.toFixed(2)}`;
+
+        const discRow = document.getElementById('discountRow');
+        if (data.discount_amount > 0) {
+            discRow.style.display = 'flex';
+            document.getElementById('displayDiscount').textContent = `- ₹${data.discount_amount.toFixed(2)}`;
+        } else {
+            discRow.style.display = 'none';
+        }
+
+        const intraDiv = document.getElementById('intraStateTaxRows');
+        const interDiv = document.getElementById('interStateTaxRow');
+
+        if (taxType === 'intra_state') {
+            intraDiv.style.display = 'block';
+            interDiv.style.display = 'none';
+            document.getElementById('displayCgst').textContent = `₹${data.cgst_amount.toFixed(2)}`;
+            document.getElementById('displaySgst').textContent = `₹${data.sgst_amount.toFixed(2)}`;
+        } else if (taxType === 'inter_state') {
+            intraDiv.style.display = 'none';
+            interDiv.style.display = 'block';
+            document.getElementById('displayIgst').textContent = `₹${data.igst_amount.toFixed(2)}`;
+        } else {
+            intraDiv.style.display = 'none';
+            interDiv.style.display = 'none';
+        }
+    })
+    .catch(err => console.error("Calc error:", err));
+}
+
+// Event Listeners
+document.getElementById('addItemBtn').addEventListener('click', addItem);
+document.getElementById('taxTypeSelect').addEventListener('change', calculateTotals);
+document.getElementById('discountTypeSelect').addEventListener('change', calculateTotals);
+document.getElementById('discountValueInput').addEventListener('input', calculateTotals);
+
+// Customer selection handler
+const custSelect = document.getElementById('customerSelect');
+custSelect.addEventListener('change', function () {
+    const selected = custSelect.options[custSelect.selectedIndex];
+    const peek = document.getElementById('customerPeek');
+    if (!custSelect.value) {
+        peek.classList.add('d-none');
+        return;
+    }
+    peek.classList.remove('d-none');
+    document.getElementById('peekPhone').textContent = selected.getAttribute('data-phone') || '—';
+    document.getElementById('peekEmail').textContent = selected.getAttribute('data-email') || '—';
+    document.getElementById('peekGstin').textContent = selected.getAttribute('data-gstin') || '—';
+    document.getElementById('peekAddress').textContent = selected.getAttribute('data-address') || '—';
+});
+
+// Init on page load
+if (custSelect.value) {
+    custSelect.dispatchEvent(new Event('change'));
+}
+if (lineItems.length === 0) {
+    addItem();
+} else {
+    renderTable();
+}
+
+// Validation before form submit
+document.getElementById('quotationForm').addEventListener('submit', function (e) {
+    if (!custSelect.value) {
+        alert("Please select a customer.");
+        e.preventDefault();
+        return;
+    }
+    if (lineItems.length === 0) {
+        alert("Please add at least one line item.");
+        e.preventDefault();
+        return;
+    }
+    for (let it of lineItems) {
+        if (!it.product_name.trim()) {
+            alert("All items must have a product name.");
+            e.preventDefault();
+            return;
+        }
+    }
+    document.getElementById('itemsJsonInput').value = JSON.stringify(lineItems);
+});
+</script>
+{% endblock %}

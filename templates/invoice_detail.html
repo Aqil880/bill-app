@@ -1,0 +1,398 @@
+{% extends 'base.html' %}
+
+{% block title %}Invoice {{ invoice.invoice_number }} - BillingPro{% endblock %}
+{% block page_title %}Invoice Details{% endblock %}
+
+{% block head %}
+<style>
+/* Print-specific monochrome stylesheet */
+@media print {
+    @page {
+        size: A4;
+        margin: 15mm;
+    }
+    body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    .app-sidebar, .app-header, .btn, .no-print, .modal, .alert {
+        display: none !important;
+    }
+    .app-main, .app-content {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .invoice-card {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        min-height: 250mm !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        color: #000000 !important;
+    }
+    .invoice-card * {
+        color: #000000 !important;
+        border-color: #000000 !important;
+    }
+    .invoice-footer-section {
+        margin-top: auto !important;
+        padding-top: 15px !important;
+    }
+    .table th, .table td {
+        border-color: #000000 !important;
+        color: #000000 !important;
+    }
+    a {
+        text-decoration: none !important;
+        color: #000000 !important;
+    }
+}
+
+/* Screen styling for clean monochrome invoice card */
+.invoice-card {
+    background: #ffffff;
+    border: 1px solid #000000;
+    color: #000000;
+    min-height: 750px;
+    display: flex;
+    flex-direction: column;
+}
+.invoice-body-content {
+    flex-grow: 1;
+}
+.invoice-footer-section {
+    margin-top: auto;
+    padding-top: 25px;
+}
+.invoice-box-border {
+    border: 1px solid #000000;
+}
+.invoice-card .table th {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border-top: 1.5px solid #000000 !important;
+    border-bottom: 1.5px solid #000000 !important;
+    font-weight: 700;
+}
+.invoice-card .table td {
+    color: #000000 !important;
+    border-bottom: 1px solid #000000 !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4 no-print">
+    <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <a href="{{ url_for('invoices.list_invoices') }}" class="btn btn-outline-secondary btn-sm mb-2">
+                <i class="bi bi-arrow-left me-1"></i> Back to Invoices
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <h4 class="mb-0 fw-bold text-dark">{{ invoice.invoice_number }}</h4>
+                <span class="badge bg-dark border border-dark fs-6">{{ invoice.payment_status|upper }}</span>
+                {% if invoice.status == 'cancelled' %}
+                    <span class="badge bg-secondary border border-dark fs-6">CANCELLED</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" onclick="window.print()" class="btn btn-outline-dark shadow-sm">
+                <i class="bi bi-printer me-1"></i> Quick Print (B&W)
+            </button>
+            <a href="{{ url_for('invoices.print_pdf', invoice_id=invoice.id) }}" target="_blank" class="btn btn-outline-secondary shadow-sm">
+                <i class="bi bi-file-earmark-pdf me-1"></i> Open PDF (B&W)
+            </a>
+            <a href="{{ url_for('invoices.download_pdf', invoice_id=invoice.id) }}" class="btn btn-dark shadow-sm">
+                <i class="bi bi-download me-1"></i> Download PDF
+            </a>
+            {% if invoice.status != 'cancelled' and invoice.balance_amount > 0.01 %}
+                <button type="button" class="btn btn-success shadow-sm" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
+                    <i class="bi bi-wallet2 me-1"></i> Record Payment
+                </button>
+            {% endif %}
+            {% if invoice.status != 'cancelled' %}
+                <button type="button" class="btn btn-outline-danger shadow-sm" data-bs-toggle="modal" data-bs-target="#cancelInvoiceModal">
+                    <i class="bi bi-x-circle me-1"></i> Cancel Invoice
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Invoice Document Card (Clean Black Text Format) -->
+<div class="card invoice-card shadow-sm p-4 p-md-5 mb-4">
+    <div class="invoice-body-content">
+        <!-- Invoice Top Header -->
+        <div class="row g-4 mb-4 pb-3 border-bottom border-dark">
+            <div class="col-sm-7">
+                <h4 class="fw-bold text-dark mb-1">{{ settings.business_name }}</h4>
+                {% if settings.address %}
+                    <p class="small mb-1">{{ settings.address }}</p>
+                {% endif %}
+                <p class="small mb-1">
+                    {% if settings.phone %}Phone: {{ settings.phone }}{% endif %}
+                    {% if settings.phone and settings.email %} | {% endif %}
+                    {% if settings.email %}Email: {{ settings.email }}{% endif %}
+                </p>
+                {% if settings.gstin %}
+                    <p class="small mb-0"><strong>GSTIN:</strong> {{ settings.gstin }}</p>
+                {% endif %}
+            </div>
+            <div class="col-sm-5 text-sm-end">
+                <h2 class="fw-bold mb-1 text-dark">TAX INVOICE</h2>
+                <div class="fw-bold text-dark">Invoice #: {{ invoice.invoice_number }}</div>
+                <div class="small">Date: {{ invoice.invoice_date }}</div>
+                <div class="fw-bold small mt-1">Status: {{ invoice.payment_status }}</div>
+            </div>
+        </div>
+
+        <!-- Billed To Section (Clean & Concise) -->
+        <div class="row g-4 mb-4 p-3 invoice-box-border rounded-1">
+            <div class="col-12">
+                <span class="small fw-bold text-uppercase">BILLED TO:</span>
+                <h6 class="fw-bold text-dark mt-1 mb-1">{{ invoice.customer_name }}</h6>
+                {% if invoice.customer_phone and invoice.customer_phone != '—' %}
+                    <div class="small">Phone: {{ invoice.customer_phone }}</div>
+                {% endif %}
+                {% if invoice.customer_email and invoice.customer_email != '—' %}
+                    <div class="small">Email: {{ invoice.customer_email }}</div>
+                {% endif %}
+                {% if invoice.customer_address and invoice.customer_address != '—' %}
+                    <div class="small">Address: {{ invoice.customer_address }}</div>
+                {% endif %}
+                {% if invoice.customer_gstin and invoice.customer_gstin != '—' %}
+                    <div class="small"><strong>GSTIN:</strong> {{ invoice.customer_gstin }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Line Items Table -->
+        <div class="table-responsive mb-4">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;" class="text-center">#</th>
+                        <th>Product Description</th>
+                        <th style="width: 90px;" class="text-center">Qty</th>
+                        <th style="width: 130px;" class="text-end">Unit Price (₹)</th>
+                        <th style="width: 100px;" class="text-end">GST Rate</th>
+                        <th style="width: 140px;" class="text-end">Total Amount (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for it in invoice['items'] %}
+                    <tr>
+                        <td class="text-center">{{ loop.index }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ it.product_name }}</div>
+                            {% if it.sku %}
+                                <div class="small">SKU: {{ it.sku }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-center fw-semibold">{{ it.quantity }}</td>
+                        <td class="text-end">₹{{ "%.2f"|format(it.unit_price) }}</td>
+                        <td class="text-end">{{ it.gst_rate }}%</td>
+                        <td class="text-end fw-bold text-dark">₹{{ "%.2f"|format(it.total_amount) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Summary & Totals -->
+        <div class="row g-4 justify-content-between mb-4">
+            <div class="col-md-6">
+                {% if invoice.notes and invoice.notes.strip() %}
+                    <div class="p-3 invoice-box-border rounded-1">
+                        <span class="small fw-bold">Note:</span>
+                        <div class="small mt-1">{{ invoice.notes }}</div>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="col-md-6 col-lg-5">
+                <div class="p-3 invoice-box-border rounded-1">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Subtotal:</span>
+                        <span class="fw-semibold">₹{{ "%.2f"|format(invoice.subtotal) }}</span>
+                    </div>
+                    {% if invoice.discount_amount > 0 %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Discount ({{ invoice.discount_type }}):</span>
+                        <span class="fw-semibold">- ₹{{ "%.2f"|format(invoice.discount_amount) }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="fw-bold">Taxable Amount:</span>
+                        <span class="fw-bold">₹{{ "%.2f"|format(invoice.taxable_amount) }}</span>
+                    </div>
+                    {% if invoice.tax_type == 'intra_state' %}
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>CGST:</span>
+                            <span>₹{{ "%.2f"|format(invoice.cgst_amount) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>SGST:</span>
+                            <span>₹{{ "%.2f"|format(invoice.sgst_amount) }}</span>
+                        </div>
+                    {% elif invoice.tax_type == 'inter_state' %}
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>IGST:</span>
+                            <span>₹{{ "%.2f"|format(invoice.igst_amount) }}</span>
+                        </div>
+                    {% endif %}
+                    <hr class="my-2 border-dark">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold fs-6">Grand Total:</span>
+                        <span class="fw-bold fs-5">₹{{ "%.2f"|format(invoice.grand_total) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small">Amount Paid:</span>
+                        <span class="fw-bold">₹{{ "%.2f"|format(invoice.paid_amount) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="small">Outstanding Balance:</span>
+                        <span class="fw-bold">₹{{ "%.2f"|format(invoice.balance_amount) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Terms & Signatures (Strictly at the Bottom) -->
+    <div class="invoice-footer-section border-top border-dark pt-3">
+        <div class="row g-4 align-items-end">
+            <div class="col-8">
+                <span class="fw-bold small text-uppercase">Terms & Conditions:</span>
+                <p class="small mb-0 mt-1" style="white-space: pre-line;">{{ settings.terms_conditions }}</p>
+            </div>
+            <div class="col-4 text-center">
+                <div class="small fw-bold mb-4">For {{ settings.business_name }}</div>
+                <div class="border-top border-dark pt-1 small fw-bold">Authorized Signatory</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payments Ledger (Screen only) -->
+    <div class="border-top border-dark pt-4 mt-4 no-print">
+        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history me-2"></i>Payment Transactions Log</h6>
+        {% if invoice['payments'] %}
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Payment ID</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Method</th>
+                            <th>Reference</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in invoice['payments'] %}
+                        <tr>
+                            <td>#{{ p.id }}</td>
+                            <td>{{ p.payment_date }}</td>
+                            <td class="fw-bold">₹{{ "%.2f"|format(p.amount) }}</td>
+                            <td>{{ p.payment_method }}</td>
+                            <td>{{ p.reference_number or '—' }}</td>
+                            <td class="small">{{ p.notes or '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted small mb-0">No payment records logged for this invoice.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal: Record Payment -->
+<div class="modal fade no-print" id="recordPaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Record Additional Payment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('invoices.add_payment', invoice_id=invoice.id) }}" method="POST">
+                <div class="modal-body p-4">
+                    <div class="p-3 bg-light rounded-1 mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Total Invoice Amount:</span>
+                            <span class="fw-bold">₹{{ "%.2f"|format(invoice.grand_total) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Currently Outstanding:</span>
+                            <span class="fw-bold text-danger">₹{{ "%.2f"|format(invoice.balance_amount) }}</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Payment Amount (₹) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" max="{{ invoice.balance_amount }}" name="amount" class="form-control" required value="{{ "%.2f"|format(invoice.balance_amount) }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Payment Method <span class="text-danger">*</span></label>
+                        <select name="payment_method" class="form-select" required>
+                            {% for pm in payment_methods %}
+                                <option value="{{ pm }}">{{ pm }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Reference / Transaction Number</label>
+                        <input type="text" name="reference_number" class="form-control" placeholder="e.g. UPI Ref / Cheque No / Card Auth Code">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Notes</label>
+                        <input type="text" name="notes" class="form-control" placeholder="Optional payment remarks">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-dark px-4">Submit Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Cancel Invoice -->
+<div class="modal fade no-print" id="cancelInvoiceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">Confirm Invoice Cancellation</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('invoices.cancel_invoice', invoice_id=invoice.id) }}" method="POST">
+                <div class="modal-body p-4">
+                    <p class="text-dark mb-3">
+                        Are you sure you want to cancel invoice <strong>{{ invoice.invoice_number }}</strong>?
+                    </p>
+                    <div class="alert alert-secondary small mb-3">
+                        <strong>Automatic Stock Restoration:</strong> All billed product quantities will be immediately restored to your available inventory stock and recorded in the stock ledger.
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Reason for Cancellation</label>
+                        <textarea name="reason" class="form-control" rows="2" required placeholder="e.g. Customer cancelled order, duplicate invoice created"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Keep Invoice</button>
+                    <button type="submit" class="btn btn-danger px-4">Confirm Cancellation & Restore Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

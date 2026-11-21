@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+
+{% block title %}Quotation #{{ quotation.quotation_number }} - BillingPro{% endblock %}
+{% block page_title %}Quotation Details{% endblock %}
+
+{% block content %}
+<!-- Top Header & Actions Bar -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div class="d-flex align-items-center gap-2">
+        <a href="{{ url_for('quotations.list_quotations') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Back to Quotes
+        </a>
+        <h4 class="mb-0 fw-bold text-dark">{{ quotation.quotation_number }}</h4>
+        {% if quotation.status == 'Converted' %}
+            <span class="badge badge-soft-primary"><i class="bi bi-check-all me-1"></i>Converted to Bill</span>
+        {% elif quotation.status == 'Accepted' %}
+            <span class="badge badge-soft-success"><i class="bi bi-check-circle me-1"></i>Accepted</span>
+        {% elif quotation.status == 'Sent' %}
+            <span class="badge bg-light text-primary border"><i class="bi bi-send me-1"></i>Sent</span>
+        {% elif quotation.status == 'Declined' %}
+            <span class="badge badge-soft-danger"><i class="bi bi-x-circle me-1"></i>Declined</span>
+        {% else %}
+            <span class="badge bg-light text-secondary border">Draft</span>
+        {% endif %}
+    </div>
+
+    <!-- Right Action Buttons -->
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        {% if quotation.status != 'Converted' %}
+            <button type="button" class="btn btn-success d-flex align-items-center shadow-sm" data-bs-toggle="modal" data-bs-target="#convertInvoiceModal">
+                <i class="bi bi-receipt me-1"></i> Convert to Invoice
+            </button>
+            <a href="{{ url_for('quotations.edit_quotation', quotation_id=quotation.id) }}" class="btn btn-outline-primary d-flex align-items-center">
+                <i class="bi bi-pencil me-1"></i> Edit Quote
+            </a>
+        {% else %}
+            {% if quotation.converted_invoice_id %}
+                <a href="{{ url_for('invoices.view_invoice', invoice_id=quotation.converted_invoice_id) }}" class="btn btn-primary d-flex align-items-center">
+                    <i class="bi bi-receipt me-1"></i> View Generated Invoice ({{ quotation.converted_invoice_number }})
+                </a>
+            {% endif %}
+        {% endif %}
+
+        <a href="{{ url_for('quotations.print_pdf', quotation_id=quotation.id) }}" target="_blank" class="btn btn-outline-dark d-flex align-items-center">
+            <i class="bi bi-printer me-1"></i> Print
+        </a>
+        <a href="{{ url_for('quotations.download_pdf', quotation_id=quotation.id) }}" class="btn btn-outline-secondary d-flex align-items-center">
+            <i class="bi bi-download me-1"></i> Download PDF
+        </a>
+
+        {% if quotation.status != 'Converted' %}
+            <!-- Change Status Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    Status: {{ quotation.status }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow">
+                    {% for st in statuses %}
+                        {% if st != 'Converted' %}
+                            <li>
+                                <form action="{{ url_for('quotations.update_status', quotation_id=quotation.id) }}" method="POST">
+                                    <input type="hidden" name="status" value="{{ st }}">
+                                    <button type="submit" class="dropdown-item {% if quotation.status == st %}active{% endif %}">
+                                        Mark as {{ st }}
+                                    </button>
+                                </form>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+            <button type="button" class="btn btn-outline-danger" title="Delete Quote"
+                    data-bs-toggle="modal" data-bs-target="#confirmDeleteModal"
+                    data-action="{{ url_for('quotations.delete_quotation', quotation_id=quotation.id) }}"
+                    data-title="Delete Quotation"
+                    data-message="Are you sure you want to delete Quotation #{{ quotation.quotation_number }}? This action cannot be undone.">
+                <i class="bi bi-trash"></i>
+            </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Main Printable Preview Sheet -->
+<div class="card border-0 shadow-sm p-4 p-md-5 bg-white">
+    <!-- Header Block: Business Info & Quotation Meta -->
+    <div class="row align-items-start mb-4 pb-4 border-bottom g-3">
+        <div class="col-sm-7">
+            <h4 class="fw-bold mb-1 text-dark" style="font-family: 'Outfit', sans-serif;">{{ settings.business_name }}</h4>
+            <div class="text-muted small">
+                <div>{{ settings.address }}</div>
+                <div>Phone: {{ settings.phone }} | Email: {{ settings.email }}</div>
+                {% if settings.gstin %}
+                    <div class="fw-semibold text-dark">GSTIN: {{ settings.gstin }}</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-sm-5 text-sm-end">
+            <span class="badge bg-light text-dark border px-3 py-2 fw-bold text-uppercase tracking-wider fs-7">
+                QUOTATION / ESTIMATE
+            </span>
+            <div class="mt-2">
+                <div class="fw-bold text-dark fs-6">{{ quotation.quotation_number }}</div>
+                <div class="text-muted small">Date: <span class="fw-semibold text-dark">{{ quotation.quotation_date }}</span></div>
+                {% if quotation.valid_until %}
+                    <div class="text-muted small">Valid Until: <span class="fw-semibold text-dark">{{ quotation.valid_until }}</span></div>
+                {% endif %}
+                <div class="text-muted small">Status: <span class="fw-bold text-uppercase">{{ quotation.status }}</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prepared For (Customer) Block -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100 border">
+                <span class="text-muted small fw-bold text-uppercase d-block mb-1">Prepared For</span>
+                <h5 class="fw-bold mb-1 text-dark">{{ quotation.customer_name }}</h5>
+                <div class="small text-muted">
+                    <div><i class="bi bi-telephone me-1"></i>{{ quotation.customer_phone }}</div>
+                    {% if quotation.customer_email %}
+                        <div><i class="bi bi-envelope me-1"></i>{{ quotation.customer_email }}</div>
+                    {% endif %}
+                    {% if quotation.customer_address %}
+                        <div><i class="bi bi-geo-alt me-1"></i>{{ quotation.customer_address }}</div>
+                    {% endif %}
+                    {% if quotation.customer_gstin %}
+                        <div class="fw-semibold text-dark mt-1">GSTIN: {{ quotation.customer_gstin }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="p-3 bg-light rounded-3 h-100 border d-flex flex-column justify-content-between">
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase d-block mb-1">Quote Summary</span>
+                    <div class="small text-muted">Total Products: <span class="fw-bold text-dark">{{ quotation['items']|length }} item(s)</span></div>
+                    <div class="small text-muted">Tax Treatment:
+                        <span class="badge bg-white text-dark border fw-semibold">
+                            {% if quotation.tax_type == 'intra_state' %}Intra-State (CGST + SGST)
+                            {% elif quotation.tax_type == 'inter_state' %}Inter-State (IGST)
+                            {% else %}GST Exempt{% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-2 pt-2 border-top">
+                    <span class="small text-muted">Estimated Grand Total:</span>
+                    <h3 class="mb-0 fw-bold text-primary">₹{{ "%.2f"|format(quotation.grand_total) }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <div class="table-responsive mb-4">
+        <table class="table table-bordered align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 45px;" class="text-center">#</th>
+                    <th>Product Description</th>
+                    <th class="text-center" style="width: 90px;">Qty</th>
+                    <th class="text-end" style="width: 130px;">Unit Price (₹)</th>
+                    <th class="text-end" style="width: 100px;">GST %</th>
+                    <th class="text-end" style="width: 140px;">Total Amount (₹)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for it in quotation['items'] %}
+                <tr>
+                    <td class="text-center text-muted small">{{ loop.index }}</td>
+                    <td>
+                        <div class="fw-bold text-dark">{{ it.product_name }}</div>
+                        {% if it.sku %}
+                            <code class="small text-muted">SKU: {{ it.sku }}</code>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">{{ it.quantity }}</td>
+                    <td class="text-end">₹{{ "%.2f"|format(it.unit_price) }}</td>
+                    <td class="text-end">{{ it.gst_rate }}%</td>
+                    <td class="text-end fw-bold text-dark">₹{{ "%.2f"|format(it.total_amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Lower Summary Section -->
+    <div class="row g-4 align-items-start">
+        <div class="col-md-7">
+            {% if quotation.notes %}
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <span class="small fw-bold text-uppercase text-muted d-block mb-1">Notes & Specifications</span>
+                    <p class="small mb-0 text-dark" style="white-space: pre-line;">{{ quotation.notes }}</p>
+                </div>
+            {% endif %}
+            <div class="p-3 bg-light rounded-3 border">
+                <span class="small fw-bold text-uppercase text-muted d-block mb-1">Standard Terms & Conditions</span>
+                <p class="small mb-0 text-muted">
+                    1. This quotation is valid for 30 days from date of issue.<br>
+                    2. Product availability is subject to change at the time of final confirmation.<br>
+                    3. Standard GST and local delivery terms apply.
+                </p>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="border rounded-3 p-3 bg-light">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Subtotal:</span>
+                    <span class="fw-semibold">₹{{ "%.2f"|format(quotation.subtotal) }}</span>
+                </div>
+                {% if quotation.discount_amount > 0 %}
+                    <div class="d-flex justify-content-between mb-2 text-danger">
+                        <span>Discount:</span>
+                        <span class="fw-semibold">- ₹{{ "%.2f"|format(quotation.discount_amount) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Taxable Value:</span>
+                        <span class="fw-semibold">₹{{ "%.2f"|format(quotation.taxable_amount) }}</span>
+                    </div>
+                {% endif %}
+
+                {% if quotation.cgst_amount > 0 or quotation.sgst_amount > 0 %}
+                    <div class="d-flex justify-content-between mb-1 small text-muted">
+                        <span>CGST:</span>
+                        <span>₹{{ "%.2f"|format(quotation.cgst_amount) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 small text-muted">
+                        <span>SGST:</span>
+                        <span>₹{{ "%.2f"|format(quotation.sgst_amount) }}</span>
+                    </div>
+                {% elif quotation.igst_amount > 0 %}
+                    <div class="d-flex justify-content-between mb-2 small text-muted">
+                        <span>IGST:</span>
+                        <span>₹{{ "%.2f"|format(quotation.igst_amount) }}</span>
+                    </div>
+                {% endif %}
+
+                <div class="d-flex justify-content-between mb-2 pt-2 border-top">
+                    <span class="text-muted">Total Tax:</span>
+                    <span class="fw-semibold">₹{{ "%.2f"|format(quotation.total_tax) }}</span>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                    <span class="fw-bold text-dark fs-6">Estimated Total:</span>
+                    <h4 class="fw-bold text-dark mb-0">₹{{ "%.2f"|format(quotation.grand_total) }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Convert Quotation to Invoice -->
+<div class="modal fade" id="convertInvoiceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-receipt me-2 text-success"></i>Convert to Invoice</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('quotations.convert_to_invoice', quotation_id=quotation.id) }}" method="POST">
+                <div class="modal-body p-4">
+                    <div class="p-3 bg-light rounded-3 mb-3">
+                        <div class="small text-muted text-uppercase fw-semibold">Quotation Total</div>
+                        <h3 class="fw-bold text-primary mb-1">₹{{ "%.2f"|format(quotation.grand_total) }}</h3>
+                        <div class="small text-muted">Converting will officially bill <strong>{{ quotation.customer_name }}</strong> and update inventory stock atomically.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Amount Received Now (₹)</label>
+                        <input type="number" step="0.01" min="0" max="{{ quotation.grand_total }}" name="paid_amount"
+                               class="form-control form-control-lg fw-bold text-success" value="0.00" placeholder="0.00">
+                        <small class="text-muted">Enter 0 for unpaid bill, or full/partial payment received.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Payment Method (if paying now)</label>
+                        <select name="payment_method" class="form-select">
+                            {% for method in payment_methods %}
+                                <option value="{{ method }}">{{ method }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label fw-semibold">Invoice Conversion Notes</label>
+                        <input type="text" name="notes" class="form-control" placeholder="e.g. Order confirmed via phone">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success px-4"><i class="bi bi-check2-circle me-1"></i> Generate Official Invoice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

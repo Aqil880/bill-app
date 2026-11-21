@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Settings - BillingPro{% endblock %}
+{% block page_title %}Application Settings{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Business Profile & Invoice Configuration -->
+    <div class="col-12 col-xl-7">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold text-dark">
+                    <i class="bi bi-building me-2 text-primary"></i>Business Profile & Invoice Settings
+                </h6>
+            </div>
+            <form action="{{ url_for('settings.update_settings') }}" method="POST">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Business Name <span class="text-danger">*</span></label>
+                        <input type="text" name="business_name" class="form-control" required value="{{ settings.business_name or '' }}">
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Contact Phone Number <span class="text-danger">*</span></label>
+                            <input type="text" name="phone" class="form-control" required value="{{ settings.phone or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
+                            <input type="email" name="email" class="form-control" required value="{{ settings.email or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">GSTIN <span class="text-danger">*</span></label>
+                            <input type="text" name="gstin" class="form-control" maxlength="15" required value="{{ settings.gstin or '' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Currency Symbol</label>
+                            <input type="text" name="currency_symbol" class="form-control text-center" value="{{ settings.currency_symbol or '₹' }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Business Address</label>
+                        <textarea name="address" class="form-control" rows="2">{{ settings.address or '' }}</textarea>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Default Invoice Terms & Conditions</label>
+                        <textarea name="terms_conditions" class="form-control" rows="3">{{ settings.terms_conditions or '' }}</textarea>
+                        <div class="form-text small">These terms will appear automatically in the footer of all exported PDF invoices.</div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light p-3 text-end">
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-save me-1"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right Column: Product Categories Management -->
+    <div class="col-12 col-xl-5">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold text-dark">
+                    <i class="bi bi-tags me-2 text-primary"></i>Product Categories
+                </h6>
+            </div>
+            <div class="card-body p-4">
+                <!-- Add Category Form -->
+                <form action="{{ url_for('settings.add_category') }}" method="POST" class="mb-4 p-3 bg-light rounded-3">
+                    <div class="fw-semibold text-dark mb-2">Add New Category</div>
+                    <div class="mb-2">
+                        <input type="text" name="category_name" class="form-control" required placeholder="Category name (e.g. Peripherals)">
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" name="category_desc" class="form-control form-control-sm" placeholder="Description (optional)">
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                        <i class="bi bi-plus-lg me-1"></i> Add Category
+                    </button>
+                </form>
+
+                <!-- Categories List -->
+                <div class="fw-semibold text-dark mb-2">Existing Categories ({{ categories|length }})</div>
+                <div class="list-group">
+                    {% for cat in categories %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <div>
+                            <span class="fw-medium text-dark">{{ cat.name }}</span>
+                            {% if cat.description %}
+                                <div class="small text-muted">{{ cat.description }}</div>
+                            {% endif %}
+                        </div>
+                        <form action="{{ url_for('settings.delete_category', category_id=cat.id) }}" method="POST" onsubmit="return confirm('Delete this category? Associated products will have category set to None.');">
+                            <button type="submit" class="btn btn-link text-danger p-0" title="Delete category">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

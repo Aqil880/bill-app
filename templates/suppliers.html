@@ -1,0 +1,594 @@
+{% extends 'base.html' %}
+
+{% block title %}Suppliers & Accounts Payable - BillingPro{% endblock %}
+{% block page_title %}Suppliers & Payables{% endblock %}
+
+{% block content %}
+<!-- Top Metrics Row -->
+<div class="row g-3 mb-4">
+    <!-- 1. Total Suppliers -->
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center">
+            <div class="stat-icon me-3" style="background: rgba(14, 165, 233, 0.12); color: #0284c7;">
+                <i class="bi bi-truck-flatbed fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Total Suppliers</span>
+                <h3 class="mb-0 fw-bold text-dark">{{ total_suppliers }}</h3>
+                <small class="text-muted">Registered vendors</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Total Purchases -->
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center">
+            <div class="stat-icon me-3" style="background: rgba(99, 102, 241, 0.12); color: #4f46e5;">
+                <i class="bi bi-cart-check fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Stock Purchases</span>
+                <h3 class="mb-0 fw-bold text-dark">₹{{ "%.2f"|format(total_purchases) }}</h3>
+                <small class="text-muted">Total inventory bills</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Total Paid -->
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center">
+            <div class="stat-icon me-3" style="background: rgba(16, 185, 129, 0.12); color: #059669;">
+                <i class="bi bi-check2-circle fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Amount Paid</span>
+                <h3 class="mb-0 fw-bold text-success">₹{{ "%.2f"|format(total_paid) }}</h3>
+                <small class="text-muted">Disbursed payments</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Payment to Give (Payables) -->
+    <div class="col-12 col-sm-6 col-xl-3 stat-card-wrapper">
+        <div class="card border-0 p-3 h-100 d-flex flex-row align-items-center {% if total_payables > 0 %}border-danger border-opacity-50{% endif %}">
+            <div class="stat-icon me-3" style="background: rgba(239, 68, 68, 0.12); color: #dc2626;">
+                <i class="bi bi-wallet2 fs-4"></i>
+            </div>
+            <div>
+                <span class="text-muted small fw-bold tracking-wider text-uppercase">Payment to Give</span>
+                <h3 class="mb-0 fw-bold {% if total_payables > 0 %}text-danger{% else %}text-success{% endif %}">
+                    ₹{{ "%.2f"|format(total_payables) }}
+                </h3>
+                <small class="text-muted">Pending supplier dues</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Bar -->
+<div class="row g-3 mb-4">
+    <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <!-- Search -->
+        <form method="GET" action="{{ url_for('suppliers.list_suppliers') }}" class="d-flex align-items-center gap-2 flex-grow-1" style="max-width: 480px;">
+            <div class="input-group shadow-xs">
+                <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" name="search" class="form-control border-start-0 ps-0" placeholder="Search by name, phone, code..." value="{{ search }}">
+            </div>
+            {% if search %}
+                <a href="{{ url_for('suppliers.list_suppliers') }}" class="btn btn-link text-muted p-1" title="Clear Search"><i class="bi bi-x-circle fs-5"></i></a>
+            {% endif %}
+        </form>
+
+        <!-- Right Buttons -->
+        <div class="d-flex align-items-center gap-2">
+            <a href="{{ url_for('inventory.list_inventory') }}" class="btn btn-outline-secondary shadow-sm">
+                <i class="bi bi-box-seam me-1"></i> View Stock
+            </a>
+            <button type="button" class="btn btn-primary d-flex align-items-center shadow" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
+                <i class="bi bi-plus-lg me-1"></i> Add Supplier
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Suppliers Table Card -->
+<div class="card border-0 shadow-sm overflow-hidden">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-dark">
+            <i class="bi bi-truck-flatbed me-2 text-primary"></i>Registered Suppliers ({{ suppliers|length }})
+        </h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Supplier ID</th>
+                    <th>Supplier / Company</th>
+                    <th>Contact Info</th>
+                    <th>GSTIN</th>
+                    <th>Catalog Items</th>
+                    <th>Total Purchases</th>
+                    <th>Total Paid</th>
+                    <th>Balance to Pay</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if suppliers %}
+                    {% for s in suppliers %}
+                    <tr>
+                        <td>
+                            <span class="badge bg-light text-dark border fw-bold">{{ s.supplier_id }}</span>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ s.name }}</div>
+                            {% if s.contact_person %}
+                                <div class="small text-muted"><i class="bi bi-person me-1"></i>{{ s.contact_person }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="text-dark small"><i class="bi bi-telephone me-1 text-muted"></i>{{ s.phone }}</div>
+                            {% if s.email %}
+                                <div class="text-muted small"><i class="bi bi-envelope me-1"></i>{{ s.email }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <code class="small text-dark">{{ s.gstin or '—' }}</code>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-secondary border">{{ s.products_count }} item(s)</span>
+                        </td>
+                        <td>
+                            <span class="fw-bold text-dark">₹{{ "%.2f"|format(s.total_purchases) }}</span>
+                        </td>
+                        <td>
+                            <span class="text-success fw-semibold">₹{{ "%.2f"|format(s.total_paid) }}</span>
+                        </td>
+                        <td>
+                            {% if s.balance_due > 0 %}
+                                <span class="badge badge-soft-danger fw-bold fs-7">
+                                    <i class="bi bi-hourglass-split me-1"></i>₹{{ "%.2f"|format(s.balance_due) }} Due
+                                </span>
+                            {% else %}
+                                <span class="badge badge-soft-success fw-bold fs-7">
+                                    <i class="bi bi-check-all me-1"></i>Settled (₹0.00)
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-success" title="Give Payment to Supplier"
+                                        data-bs-toggle="modal" data-bs-target="#paySupplierModal"
+                                        data-id="{{ s.id }}"
+                                        data-name="{{ s.name }}"
+                                        data-due="{{ s.balance_due }}">
+                                    <i class="bi bi-cash-coin me-1"></i> Pay
+                                </button>
+                                <button type="button" class="btn btn-outline-info" title="View Statement / Ledger"
+                                        onclick="viewSupplierLedger({{ s.id }})">
+                                    <i class="bi bi-journal-text"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" title="Edit Supplier"
+                                        data-bs-toggle="modal" data-bs-target="#editSupplierModal"
+                                        data-id="{{ s.id }}"
+                                        data-name="{{ s.name }}"
+                                        data-contact="{{ s.contact_person or '' }}"
+                                        data-phone="{{ s.phone }}"
+                                        data-email="{{ s.email or '' }}"
+                                        data-address="{{ s.address or '' }}"
+                                        data-gstin="{{ s.gstin or '' }}"
+                                        data-opening="{{ s.opening_balance }}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" title="Delete Supplier"
+                                        data-bs-toggle="modal" data-bs-target="#confirmDeleteModal"
+                                        data-action="{{ url_for('suppliers.delete_supplier', supplier_id=s.id) }}"
+                                        data-title="{{ s.name }}"
+                                        data-message="Are you sure you want to delete supplier '{{ s.name }}' ({{ s.supplier_id }})? This action cannot be undone.">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="bi bi-truck-flatbed display-6 d-block mb-3 text-secondary"></i>
+                            <p class="mb-1">No suppliers found matching your criteria.</p>
+                            <button type="button" class="btn btn-sm btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
+                                <i class="bi bi-plus-lg me-1"></i> Add Supplier
+                            </button>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Add Supplier -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-truck-flatbed me-2 text-primary"></i>Add New Supplier</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('suppliers.add_supplier') }}" method="POST">
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Supplier / Company Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control" required placeholder="e.g. Apex Hardware Supplies Ltd">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Contact Person</label>
+                            <input type="text" name="contact_person" class="form-control" placeholder="e.g. Rajesh Kumar">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+                            <input type="tel" name="phone" class="form-control" required placeholder="e.g. 9876543210">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email Address</label>
+                            <input type="email" name="email" class="form-control" placeholder="e.g. supplier@apex.com">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">GSTIN (Optional)</label>
+                            <input type="text" name="gstin" class="form-control text-uppercase" placeholder="e.g. 29ABCDE1234F1Z5">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Initial Opening Balance to Pay (₹)</label>
+                            <input type="number" step="0.01" min="0" name="opening_balance" class="form-control" value="0.00" placeholder="0.00">
+                            <small class="text-muted">Prior outstanding payment owed to this vendor.</small>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold">Supplier Address</label>
+                        <textarea name="address" class="form-control" rows="2" placeholder="Warehouse / Office address"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-save me-1"></i> Save Supplier</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Edit Supplier -->
+<div class="modal fade" id="editSupplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2 text-primary"></i>Edit Supplier Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editSupplierForm" method="POST" action="">
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Supplier / Company Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" id="edit_supp_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Contact Person</label>
+                            <input type="text" name="contact_person" id="edit_supp_contact" class="form-control">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+                            <input type="tel" name="phone" id="edit_supp_phone" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email Address</label>
+                            <input type="email" name="email" id="edit_supp_email" class="form-control">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">GSTIN</label>
+                            <input type="text" name="gstin" id="edit_supp_gstin" class="form-control text-uppercase">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Opening Balance (₹)</label>
+                            <input type="number" step="0.01" min="0" name="opening_balance" id="edit_supp_opening" class="form-control">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold">Supplier Address</label>
+                        <textarea name="address" id="edit_supp_address" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4"><i class="bi bi-check2-circle me-1"></i> Update Supplier</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Give Payment to Supplier -->
+<div class="modal fade" id="paySupplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cash-coin me-2 text-success"></i>Pay Supplier</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="paySupplierForm" method="POST" action="">
+                <div class="modal-body p-4">
+                    <div class="p-3 bg-light rounded-3 mb-3">
+                        <div class="fw-bold text-dark fs-6" id="pay_supp_name">Supplier Name</div>
+                        <div class="text-muted small">Current Balance Due: <span class="fw-bold text-danger" id="pay_supp_due">₹0.00</span></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Payment Amount (₹) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" name="amount" id="pay_amount_input" class="form-control form-control-lg fw-bold text-success" required placeholder="0.00">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Payment Date <span class="text-danger">*</span></label>
+                            <input type="date" name="payment_date" id="pay_date_input" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Payment Method <span class="text-danger">*</span></label>
+                            <select name="payment_method" class="form-select" required>
+                                <option value="UPI" selected>UPI / QR</option>
+                                <option value="Bank Transfer">Bank Transfer (NEFT/IMPS)</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Debit/Credit Card">Card</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Reference / UTR / Cheque Number</label>
+                        <input type="text" name="reference_number" class="form-control" placeholder="e.g. UTR123456789">
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold">Notes / Remarks</label>
+                        <input type="text" name="notes" class="form-control" placeholder="e.g. Cleared bill for batch #12">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success px-4"><i class="bi bi-check2-circle me-1"></i> Confirm Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: View Supplier Ledger & Statement -->
+<div class="modal fade" id="supplierLedgerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom py-3">
+                <div>
+                    <h5 class="modal-title fw-bold mb-0 text-dark" id="ledger_supplier_name">Supplier Statement</h5>
+                    <span class="small text-muted" id="ledger_supplier_meta">Code & Details</span>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Summary Chips -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3">
+                            <span class="text-muted small text-uppercase fw-semibold">Total Stock Billed</span>
+                            <h4 class="mb-0 fw-bold text-dark" id="ledger_total_debit">₹0.00</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3">
+                            <span class="text-muted small text-uppercase fw-semibold">Total Paid to Supplier</span>
+                            <h4 class="mb-0 fw-bold text-success" id="ledger_total_credit">₹0.00</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3">
+                            <span class="text-muted small text-uppercase fw-semibold">Net Balance to Pay</span>
+                            <h4 class="mb-0 fw-bold text-danger" id="ledger_final_balance">₹0.00</h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nav Tabs for Statement vs Supplied Products -->
+                <ul class="nav nav-tabs mb-3" id="ledgerTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-semibold" id="statement-tab" data-bs-toggle="tab" data-bs-target="#statement-pane" type="button" role="tab">
+                            <i class="bi bi-clock-history me-1"></i> Transaction Ledger
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-semibold" id="products-tab" data-bs-toggle="tab" data-bs-target="#products-pane" type="button" role="tab">
+                            <i class="bi bi-box-seam me-1"></i> Supplied Products (<span id="ledger_products_count">0</span>)
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="ledgerTabContent">
+                    <!-- Transaction Statement Tab -->
+                    <div class="tab-pane fade show active" id="statement-pane" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Type</th>
+                                        <th>Reference</th>
+                                        <th>Particulars / Description</th>
+                                        <th class="text-end">Stock Inward (Debit)</th>
+                                        <th class="text-end">Payment Given (Credit)</th>
+                                        <th class="text-end">Balance to Pay</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ledger_events_tbody">
+                                    <tr><td colspan="7" class="text-center py-4 text-muted">Loading ledger statement...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Products Supplied Tab -->
+                    <div class="tab-pane fade" id="products-pane" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Product Code</th>
+                                        <th>Product Name</th>
+                                        <th>Category</th>
+                                        <th>SKU</th>
+                                        <th>Cost Price</th>
+                                        <th>Current Stock</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ledger_products_tbody">
+                                    <tr><td colspan="6" class="text-center py-4 text-muted">Loading products...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Edit Supplier Modal Population
+const editSuppModal = document.getElementById('editSupplierModal');
+if (editSuppModal) {
+    editSuppModal.addEventListener('show.bs.modal', function (event) {
+        const btn = event.relatedTarget;
+        const id = btn.getAttribute('data-id');
+        document.getElementById('editSupplierForm').action = '/suppliers/edit/' + id;
+        document.getElementById('edit_supp_name').value = btn.getAttribute('data-name');
+        document.getElementById('edit_supp_contact').value = btn.getAttribute('data-contact');
+        document.getElementById('edit_supp_phone').value = btn.getAttribute('data-phone');
+        document.getElementById('edit_supp_email').value = btn.getAttribute('data-email');
+        document.getElementById('edit_supp_address').value = btn.getAttribute('data-address');
+        document.getElementById('edit_supp_gstin').value = btn.getAttribute('data-gstin');
+        document.getElementById('edit_supp_opening').value = btn.getAttribute('data-opening');
+    });
+}
+
+// Pay Supplier Modal Population
+const paySuppModal = document.getElementById('paySupplierModal');
+if (paySuppModal) {
+    paySuppModal.addEventListener('show.bs.modal', function (event) {
+        const btn = event.relatedTarget;
+        const id = btn.getAttribute('data-id');
+        const name = btn.getAttribute('data-name');
+        const due = parseFloat(btn.getAttribute('data-due') || 0);
+
+        document.getElementById('paySupplierForm').action = '/suppliers/pay/' + id;
+        document.getElementById('pay_supp_name').textContent = name;
+        document.getElementById('pay_supp_due').textContent = `₹${due.toFixed(2)}`;
+        document.getElementById('pay_amount_input').value = due > 0 ? due.toFixed(2) : '';
+        document.getElementById('pay_date_input').value = new Date().toISOString().split('T')[0];
+    });
+}
+
+// View Supplier Ledger & Statement AJAX
+function viewSupplierLedger(id) {
+    const modalEl = document.getElementById('supplierLedgerModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    fetch('/suppliers/api/' + id)
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            const s = data.supplier;
+            const l = data.ledger;
+            const prods = data.products;
+
+            document.getElementById('ledger_supplier_name').textContent = s.name;
+            document.getElementById('ledger_supplier_meta').textContent = `${s.supplier_id} • Phone: ${s.phone} ${s.gstin ? '• GSTIN: ' + s.gstin : ''}`;
+            document.getElementById('ledger_total_debit').textContent = `₹${l.total_debit.toFixed(2)}`;
+            document.getElementById('ledger_total_credit').textContent = `₹${l.total_credit.toFixed(2)}`;
+            document.getElementById('ledger_final_balance').textContent = `₹${l.final_balance.toFixed(2)}`;
+            document.getElementById('ledger_products_count').textContent = prods.length;
+
+            // Render Events
+            const tbody = document.getElementById('ledger_events_tbody');
+            if (!l.events || l.events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No transactions recorded yet.</td></tr>';
+            } else {
+                let html = '';
+                l.events.forEach(ev => {
+                    let typeBadge = '';
+                    if (ev.type === 'PURCHASE') {
+                        typeBadge = '<span class="badge bg-light text-primary border">Stock Inward</span>';
+                    } else if (ev.type === 'PAYMENT') {
+                        typeBadge = '<span class="badge badge-soft-success">Payment</span>';
+                    } else {
+                        typeBadge = '<span class="badge bg-light text-secondary border">Opening</span>';
+                    }
+
+                    const debitStr = ev.debit > 0 ? `₹${ev.debit.toFixed(2)}` : '—';
+                    const creditStr = ev.credit > 0 ? `<span class="text-success fw-bold">₹${ev.credit.toFixed(2)}</span>` : '—';
+                    const balClass = ev.balance > 0 ? 'text-danger fw-bold' : 'text-success fw-bold';
+
+                    html += `
+                        <tr>
+                            <td><span class="small text-muted">${ev.date}</span></td>
+                            <td>${typeBadge}</td>
+                            <td><code class="small text-dark">${ev.ref}</code></td>
+                            <td><span class="text-dark">${ev.description}</span></td>
+                            <td class="text-end">${debitStr}</td>
+                            <td class="text-end">${creditStr}</td>
+                            <td class="text-end ${balClass}">₹${ev.balance.toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+            }
+
+            // Render Products
+            const ptbody = document.getElementById('ledger_products_tbody');
+            if (!prods || prods.length === 0) {
+                ptbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No products assigned to this supplier yet.</td></tr>';
+            } else {
+                let phtml = '';
+                prods.forEach(p => {
+                    phtml += `
+                        <tr>
+                            <td><span class="badge bg-light text-dark border">${p.product_id}</span></td>
+                            <td><span class="fw-bold text-dark">${p.name}</span></td>
+                            <td><span class="badge bg-light text-secondary border">${p.category_name || 'General'}</span></td>
+                            <td><code class="small text-dark">${p.sku || '—'}</code></td>
+                            <td>₹${parseFloat(p.purchase_price).toFixed(2)}</td>
+                            <td><span class="badge badge-soft-primary">${p.stock_quantity} units</span></td>
+                        </tr>
+                    `;
+                });
+                ptbody.innerHTML = phtml;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('ledger_events_tbody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Error loading ledger.</td></tr>';
+        });
+}
+</script>
+{% endblock %}
